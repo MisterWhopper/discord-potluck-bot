@@ -1,4 +1,4 @@
-from potluck import PotluckBot, potluck_create_impl
+from potbot import PotluckBot, potluck_create_impl
 import discord
 import os
 

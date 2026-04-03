@@ -1,29 +1,60 @@
-import discord
-from discord import app_commands
-from ui import CreatePotluckModal
+from __future__ import annotations
+from dataclasses import dataclass, field
+from typing import Any, Optional, Protocol
+from string import Template
 
-class PotluckBot(discord.Client):
-    user: discord.ClientUser
+@dataclass
+class Participant:
+    name: str
+    allergies: list[str]
+    diet: list[str]
 
-    def __init__(self, enabled_guilds=[]) -> None:
-        intents = discord.Intents.default()
-        # intents.message_content = True
-        super().__init__(intents = intents)
 
-        # Need a CommandTree for commands to work at all
-        self.tree = app_commands.CommandTree(self)
-        self.enabled_guilds = enabled_guilds.copy()
+@dataclass 
+class Item:
+    name: str
+    quantity: int
 
+
+class IMessage(Protocol):
+    message_template: Template
+    def resolve(variables: Any) -> str: ...
+
+
+@dataclass
+class PotluckCreatedMessage(IMessage):
     
-    async def on_ready(self):
-        print("Bot connected successfully")
-
-    
-    async def setup_hook(self) -> None:
-        for g in self.enabled_guilds:
-            self.tree.copy_global_to(guild=g)
-            await self.tree.sync(guild=g)
+    message_template: Template
+    pass
 
 
-async def potluck_create_impl(client: discord.ClientUser, interaction: discord.Interaction):
-    await interaction.response.send_modal(CreatePotluckModal())
+@dataclass
+class Potluck:
+    participants: list[Participant] = field(default_factory=list)
+    items_required: list[Item] = field(default_factory=list)
+
+
+class IEventRecorder(Protocol):
+    def add_event(self, potluck: Potluck) -> None: ...
+
+
+# NOTE: This is technically unnecessary to the stated goal of tracking potluck items
+#       ...that said, it'd be nice to know if an item contains a dangerous ingredient.
+class IItemAuditor(Protocol):
+    def check_allergies(self, potluck: Potluck) -> list[str]: ...
+
+
+class INotifier(Protocol):
+    event_recorder: IEventRecorder
+    def send_message(self, message: IMessage): ...
+
+class PotluckEvent:
+    def __init__(self, potluck: Potluck):
+        self.potluck = potluck
+
+    @staticmethod
+    def create(potluck: Potluck, notifier: INotifier) -> PotluckEvent:
+        # Should post a message saying that a potluck has been created
+        notifier.send_message()
+        return PotluckEvent(potluck)
+        
