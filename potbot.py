@@ -1,6 +1,8 @@
 import discord
 from discord import app_commands
-from ui import CreatePotluckModal
+from ui import CreatePotluckModal, ClaimPotluckItemModal, organizer
+# from potluck import Item, parse_items, PotluckEvent, PotluckOrganizer
+
 
 class PotluckBot(discord.Client):
     user: discord.ClientUser
@@ -17,7 +19,6 @@ class PotluckBot(discord.Client):
     
     async def on_ready(self):
         print("Bot connected successfully")
-
     
     async def setup_hook(self) -> None:
         for g in self.enabled_guilds:
@@ -27,3 +28,11 @@ class PotluckBot(discord.Client):
 
 async def potluck_create_impl(client: discord.ClientUser, interaction: discord.Interaction):
     await interaction.response.send_modal(CreatePotluckModal())
+
+async def potluck_claim_item_impl(client: discord.ClientUser, interaction: discord.Interaction, potluck_name: str):
+    items = organizer.get_unassigned_items(potluck_name)
+    item_modal = ClaimPotluckItemModal()
+    for item in items:
+        item_modal.add_item(item)
+    await interaction.response.send_modal(item_modal)
+
