@@ -2,6 +2,9 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Optional, Protocol
 from string import Template
+import re
+
+ITEM_PARSING_PATTERN = re.compile(r"(?:\s*[-*])?(\d+(?=x)){1}x\s*(.*)")
 
 @dataclass
 class Participant:
@@ -58,3 +61,9 @@ class PotluckEvent:
         notifier.send_message()
         return PotluckEvent(potluck)
         
+
+def parse_items(items_raw_str: str) -> list[Item]:
+    if (items := ITEM_PARSING_PATTERN.findall(items_raw_str)) is not None:
+        print(f"Found {len(items)} matches: {items}")
+    return []
+    pass
