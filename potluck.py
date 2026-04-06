@@ -10,7 +10,7 @@ ITEM_PARSING_PATTERN = re.compile(r"(?:\s*[-*])?(\d+(?=x)){1}x\s*(.*)")
 class Item:
     name: str
     quantity: int
-    assignees: Optional[list[str]] = None
+    assignees: Optional[list[str]] = field(default_factory=list)
 
 
 @dataclass
@@ -29,8 +29,18 @@ class PotluckOrganizer:
     def get_unassigned_items(self, potluck_name: str) -> Optional[list[Item]]:
         if potluck_name not in self.active_potlucks:
             return None
-        unassigned_items = [i for i in self.active_potlucks[potluck_name].items_required if i.assignees is None]
+        unassigned_items = [i for i in self.active_potlucks[potluck_name].items_required if len(i.assignees) == 0]
         return unassigned_items
+
+    def claim_item(self, item_key: str, user_name: str):
+        potluck_name = item_key.split('.')[0]
+        item_name = item_key.split('.')[1]
+        if potluck_name not in self.active_potlucks:
+            return
+        item = next(iter([i for i in self.active_potlucks[potluck_name].items_required if i.name == item_name]))
+        item.assignees.append(user_name)
+        # item_idx = self.active_potlucks[potluck_name].items_required.index(item_name, key=lambda i:i.name)
+        # self.active_potlucks[potluck_name].items_required[item_idx].assigness.append(user_name)
 
 def parse_items(items_raw_str: str) -> list[Item]:
     results: list[Item] = []

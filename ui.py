@@ -50,10 +50,11 @@ class ClaimPotluckItemModal(discord.ui.Modal, title='Claim Potluck item'):
         )
     )
 
-    def add_item(self, item: Item):
-        print(f"Trying to add item '{item}'... ")
-        self.items_available_label.component.add_option(label=f"{item.quantity}x {item.name}",value=item.name,default=False)
-        print(f"After: {self.items_available_label.component.options}")
+    def add_potluck_items(self, potluck_name: str):
+        unassigned_items = organizer.get_unassigned_items(potluck_name)
+        for item in unassigned_items:
+            print(f"Trying to add item '{item}'... ")
+            self.items_available_label.component.add_option(label=f"{item.quantity}x {item.name}",value=f"{potluck_name}.{item.name}",default=False)
 
     async def on_submit(self, interaction: discord.Interaction):
         await claim_potluck_on_submit_impl(self, interaction)
@@ -66,7 +67,9 @@ class ClaimPotluckItemModal(discord.ui.Modal, title='Claim Potluck item'):
 
 
 async def claim_potluck_on_submit_impl(modal: ClaimPotluckItemModal, interaction: discord.Interaction):
-        await interaction.response.send_message('yippee!', ephemeral=True)
+        item_claimed = modal.items_available_label.component.values[0]
+        organizer.claim_item(item_claimed, interaction.user.name)
+        await interaction.response.send_message(f"Item '{item_claimed}' has been claimed!", ephemeral=True)
 
 async def create_potluck_on_submit_impl(modal: CreatePotluckModal, interaction: discord.Interaction):
         potluck_name = modal.event_name.value

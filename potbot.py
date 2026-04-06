@@ -30,9 +30,7 @@ async def potluck_create_impl(client: discord.ClientUser, interaction: discord.I
     await interaction.response.send_modal(CreatePotluckModal())
 
 async def potluck_claim_item_impl(client: discord.ClientUser, interaction: discord.Interaction, potluck_name: str):
-    items = organizer.get_unassigned_items(potluck_name)
     item_modal = ClaimPotluckItemModal()
-    for item in items:
-        item_modal.add_item(item)
+    item_modal.add_potluck_items(potluck_name)
     await interaction.response.send_modal(item_modal)
 
