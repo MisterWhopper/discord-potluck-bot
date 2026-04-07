@@ -1,4 +1,5 @@
 from potbot import PotluckBot, potluck_create_impl, potluck_claim_item_impl
+from ui import PotluckEventView
 import discord
 from discord import app_commands
 import os
@@ -12,7 +13,8 @@ TOKEN = get_token()
 
 @client.tree.command(name="pot_create",description="Potluck test")
 async def potluck(interaction: discord.Interaction):
-    await potluck_create_impl(client, interaction)
+    await interaction.channel.send(view=PotluckEventView())
+    # await potluck_create_impl(client, interaction)
 
 @client.tree.command(name="pot_claim",description="Claim item in potluck")
 @app_commands.describe(potluck_name="Name of Potluck event")

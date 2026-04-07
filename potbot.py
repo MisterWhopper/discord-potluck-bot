@@ -1,6 +1,6 @@
 import discord
 from discord import app_commands
-from ui import CreatePotluckModal, ClaimPotluckItemModal, organizer
+from ui import CreatePotluckModal, ClaimPotluckItemModal, organizer, PotluckEventView
 # from potluck import Item, parse_items, PotluckEvent, PotluckOrganizer
 
 
@@ -14,7 +14,7 @@ class PotluckBot(discord.Client):
 
         # Need a CommandTree for commands to work at all
         self.tree = app_commands.CommandTree(self)
-        self.enabled_guilds = enabled_guilds.copy()
+        self.enabled_guilds = enabled_guilds
 
     
     async def on_ready(self):

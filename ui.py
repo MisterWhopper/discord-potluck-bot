@@ -1,3 +1,4 @@
+from __future__ import annotations
 import discord
 import traceback
 from datetime import timedelta
@@ -5,6 +6,7 @@ from potluck import Item, PotluckOrganizer, parse_items, PotluckEvent, try_parse
 # from potbot import create_potluck_on_submit_impl, claim_potluck_on_submit_impl
 
 organizer = PotluckOrganizer()
+
 
 class CreatePotluckModal(discord.ui.Modal, title='Create Potluck'):
     # Our modal classes MUST subclass `discord.ui.Modal`,
@@ -34,10 +36,10 @@ class CreatePotluckModal(discord.ui.Modal, title='Create Potluck'):
         label="Location",
         placeholder="ur mom's house"
     )
-    request_participants_bring_food = discord.ui.Label(
-        text="Each participant should bring a food/drink",
-        component=discord.ui.Checkbox()
-    )
+    # request_participants_bring_food = discord.ui.Label(
+    #     text="Each participant should bring a food/drink",
+    #     component=discord.ui.Checkbox()
+    # )
     items_to_bring = discord.ui.TextInput(
         label='Additional items still needed',
         style=discord.TextStyle.long,
@@ -54,6 +56,27 @@ class CreatePotluckModal(discord.ui.Modal, title='Create Potluck'):
 
         # Make sure we know what the error actually is
         traceback.print_exception(type(error), error, error.__traceback__)
+
+
+class PotluckEventView(discord.ui.LayoutView):
+    message: discord.Message | None = None
+    container = discord.ui.Container["PotluckEventView"](
+        discord.ui.Section(
+            "## Test button", 
+            "Click on the button to create a modal",
+            accessory=discord.ui.Thumbnail["PotluckEventView"]("https://i.imgur.com/9sDnoUW.jpeg")
+        ),
+        accent_color=discord.Color.blurple(),
+    )
+    row: discord.ui.ActionRow[PotluckEventView] = discord.ui.ActionRow()
+
+    # TODO: This is where an interaction_check method would go
+
+    @row.button(label="Click me", style=discord.ButtonStyle.green)
+    async def callback(self, interaction: discord.Interaction, button):
+        print("Button was clicked!")
+        await interaction.response.send_modal(CreatePotluckModal())
+
 
 class SelectWithCallback(discord.ui.Select):
     def __init__(self, **kwargs):
