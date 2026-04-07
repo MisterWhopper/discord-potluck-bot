@@ -6,4 +6,6 @@ readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "discord>=2.3.2",
+    "python-dateutil>=2.9.0.post0",
+    "pytz>=2026.1.post1",
 ]

@@ -1,6 +1,7 @@
 import discord
 import traceback
-from potluck import Item, PotluckOrganizer, parse_items, PotluckEvent
+from datetime import timedelta
+from potluck import Item, PotluckOrganizer, parse_items, PotluckEvent, try_parse_datetime
 # from potbot import create_potluck_on_submit_impl, claim_potluck_on_submit_impl
 
 organizer = PotluckOrganizer()
@@ -18,14 +19,29 @@ class CreatePotluckModal(discord.ui.Modal, title='Create Potluck'):
         placeholder='Same old thing we did last week',
     )
 
-    # This is a longer, paragraph style input, where user can submit feedback
-    # Unlike the name, it is not required. If filled out, however, it will
-    # only accept a maximum of 300 characters, as denoted by the
-    # `max_length=300` kwarg.
-    items_to_bring = discord.ui.TextInput(
-        label='Items for purchase',
+    event_description = discord.ui.TextInput(
+        label='Description',
         style=discord.TextStyle.long,
-        placeholder='Format: - <quantity>x <item>',
+        required=False,
+        max_length=300
+    )
+
+    event_date = discord.ui.TextInput(
+        label='Date & Time',
+        placeholder='1999/12/31 11:59 PM',
+    )
+    event_location = discord.ui.TextInput(
+        label="Location",
+        placeholder="ur mom's house"
+    )
+    request_participants_bring_food = discord.ui.Label(
+        text="Each participant should bring a food/drink",
+        component=discord.ui.Checkbox()
+    )
+    items_to_bring = discord.ui.TextInput(
+        label='Additional items still needed',
+        style=discord.TextStyle.long,
+        placeholder='Format: <quantity>x <item> (one entry per line)',
         required=False,
         max_length=300,
     )
@@ -39,12 +55,21 @@ class CreatePotluckModal(discord.ui.Modal, title='Create Potluck'):
         # Make sure we know what the error actually is
         traceback.print_exception(type(error), error, error.__traceback__)
 
-class ClaimPotluckItemModal(discord.ui.Modal, title='Claim Potluck item'):
+class SelectWithCallback(discord.ui.Select):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
 
+    async def callback(interaction: discord.Interaction):
+        print(f"callback: {interaction = }")
+
+    async def interaction_check(interaction: discord.Interaction):
+        print(f"interaction_check: {interaction}")
+
+class ClaimPotluckItemModal(discord.ui.Modal, title='Claim Potluck item'):
     items_available_label = discord.ui.Label(
         text="Please select an item below",
         description="Unselected items",
-        component=discord.ui.Select(
+        component=SelectWithCallback(
             #max_values=25,
             required=True,
         )
@@ -73,8 +98,19 @@ async def claim_potluck_on_submit_impl(modal: ClaimPotluckItemModal, interaction
 
 async def create_potluck_on_submit_impl(modal: CreatePotluckModal, interaction: discord.Interaction):
         potluck_name = modal.event_name.value
+        description = modal.event_description.value
+        location = modal.event_location.value
+        timestamp = try_parse_datetime(modal.event_date.value)
+        if timestamp is None:
+            await interaction.response.send_message(f"Error: Could not understand timestamp input '{timestamp}', please try again.")
+            return
+        # Just set the end time by default to the end of the suggested day
+        to_eod = timedelta(hours=23-timestamp.hour, minutes=59-timestamp.minute, seconds=59-timestamp.minute)
+        end_time = timestamp + to_eod
         items = parse_items(modal.items_to_bring.value)
-        potluck = PotluckEvent(potluck_name, items)
+        potluck = PotluckEvent(potluck_name, timestamp, location, items)
         organizer.update(potluck)
         print(organizer.active_potlucks)
-        await interaction.response.send_message(f'Enjoy the cookout, {modal.event_name.value}!', ephemeral=True)
+        # Create a scheduled event in Discord (hey the feature exists, may as well use it
+        await interaction.guild.create_scheduled_event(name=potluck_name, start_time=timestamp,location=location,description=description, end_time=end_time, entity_type=discord.EntityType.external, privacy_level=discord.PrivacyLevel.guild_only)
+        await interaction.response.send_message(f'Enjoy the cookout, {interaction.user.display_name}!', ephemeral=True)
