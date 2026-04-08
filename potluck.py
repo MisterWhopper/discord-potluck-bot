@@ -1,31 +1,16 @@
 from __future__ import annotations
 from dataclasses import dataclass, field
-import dateutil.parser as DateParser
-from dateutil.parser._parser import ParserError
 from datetime import datetime
-from pytz import timezone
-from typing import Optional, Protocol, Any, Callable
+from typing import Optional, Protocol, Any
 from enum import IntEnum, auto
-from functools import partial, wraps
-
-type EventCallback = Callable[[IEvent, NotifierCallback], None]
+from functools import partial
+from events import *
 
 class DietRestriction(IntEnum):
     VEGAN = auto()
     GLUTEN_FREE = auto()
     KOSHER = auto()
     PESCATARIAN = auto()
-
-
-class EventType(IntEnum):
-    PL_EVENT_CREATE = auto()
-    PL_EVENT_EDIT = auto()
-    PL_EVENT_DELETE = auto()
-    PL_EVENT_ACCEPT_PRECHECK = auto()
-    PL_EVENT_DECLINE_PRECHECK = auto()
-    PL_EVENT_ACCEPT_POSTCHECK = auto()
-    PL_EVENT_DECLINE_POSTCHECK = auto()
-    PL_PROFILE_EDIT = auto()
 
 
 class MessageType(IntEnum):
@@ -82,71 +67,11 @@ class IMessageFactory(Protocol):
     def build(self, message_type: MessageType, data: Optional[dict[str, Any]]=None): ...
 
 
-class IEvent(Protocol):
-    type: EventType
-    from_user: User
-
-
-def event_of_type(event_type: EventType):
-    """
-    Helper decorator to ensure IEvent subclasses always have the correct event type associated.
-    This is useful for event dispatch
-    """
-    def decorator(event_cls: IEvent):
-        og_new = event_cls.__new__
-        def inner(*args, **kwargs):
-            inst = og_new(event_cls)
-            if inst is not None:
-                inst.__init__(*args, **kwargs)
-                setattr(inst, "type", event_type)
-                return inst
-        event_cls.__new__ = inner
-        return inner
-    return decorator
-
-@event_of_type(EventType.PL_EVENT_CREATE)
-@dataclass
-class PLEventCreateEvent(IEvent):
-    from_user: User
-    potluck: Potluck
-
-
-@event_of_type(EventType.PL_EVENT_EDIT)
-@dataclass
-class PLEventEditEvent(IEvent):
-    from_user: User
-    potluck_name: str
-    new_potluck: Potluck
-
-
-@event_of_type(EventType.PL_EVENT_DELETE)
-@dataclass
-class PLEventDeleteEvent(IEvent):
-    from_user: User
-    potluck_name: str
-
-
 class INotifier(Protocol):
-    _callbacks: dict[EventType, NotifierCallback]
-
-    def register_callback(self, key: EventType, callback: NotifierCallback) -> None:
-        if key in self._callbacks.keys():
-            # TODO: Throw error messages properly
-            print(f"ERROR: Tried to register a callback for event '{key}' for '{type(self)}', but one already existed")
-            return
-        self._callbacks[key] = callback
-
-    async def invoke_callback(self, event: IEvent) -> None:
-        if event.type not in self._callbacks.keys():
-            # TODO: Throw error messages properly
-            print(f"ERROR: No callback registered for event '{event.type}' via '{type(self)}'")
-            return
-        callback_ctx = self._callbacks[event.type]
-        await callback_ctx.callback(event, callback_ctx)
-
-    async def send_announcement(message: IMessage): ...
-    async def send_message(message: IMessage, to_user: User): ...
-    async def update_message(message_id: int, new_message: IMessage): ...
+    def forward_event_registration(self, event_type: EventType, callback: NotifierCallback) -> None: ...
+    async def send_announcement(self, message: IMessage): ...
+    async def send_message(self, message: IMessage, to_user: User): ...
+    async def update_message(self, message_id: int, new_message: IMessage): ...
     def run(): ...
 
 
@@ -231,12 +156,12 @@ def start_pl_bot(notifier: INotifier, repository: IRepository, message_factory: 
     if not repository.is_initialized():
         repository.init(settings)
     callback_builder = partial(NotifierCallback, notifier=notifier,repository=repository, message_factory=message_factory, settings=settings)
-    notifier.register_callback(EventType.PL_EVENT_CREATE, callback_builder(on_pl_event_create))
-    notifier.register_callback(EventType.PL_EVENT_EDIT, callback_builder(on_pl_event_edit))
-    notifier.register_callback(EventType.PL_EVENT_DELETE, callback_builder(on_pl_event_delete))
-    notifier.register_callback(EventType.PL_EVENT_ACCEPT_PRECHECK, callback_builder(on_pl_event_accept_precheck))
-    notifier.register_callback(EventType.PL_EVENT_DECLINE_PRECHECK, callback_builder(on_pl_event_decline_precheck))
-    notifier.register_callback(EventType.PL_EVENT_ACCEPT_POSTCHECK, callback_builder(on_pl_event_accept_postcheck))
-    notifier.register_callback(EventType.PL_EVENT_DECLINE_POSTCHECK, callback_builder(on_pl_event_decline_postcheck))
-    notifier.register_callback(EventType.PL_PROFILE_EDIT, callback_builder(on_pl_profile_edit))
+    notifier.forward_event_registration(EventType.PL_EVENT_CREATE, callback_builder(on_pl_event_create))
+    notifier.forward_event_registration(EventType.PL_EVENT_EDIT, callback_builder(on_pl_event_edit))
+    notifier.forward_event_registration(EventType.PL_EVENT_DELETE, callback_builder(on_pl_event_delete))
+    notifier.forward_event_registration(EventType.PL_EVENT_ACCEPT_PRECHECK, callback_builder(on_pl_event_accept_precheck))
+    notifier.forward_event_registration(EventType.PL_EVENT_DECLINE_PRECHECK, callback_builder(on_pl_event_decline_precheck))
+    notifier.forward_event_registration(EventType.PL_EVENT_ACCEPT_POSTCHECK, callback_builder(on_pl_event_accept_postcheck))
+    notifier.forward_event_registration(EventType.PL_EVENT_DECLINE_POSTCHECK, callback_builder(on_pl_event_decline_postcheck))
+    notifier.forward_event_registration(EventType.PL_PROFILE_EDIT, callback_builder(on_pl_profile_edit))
     notifier.run()
