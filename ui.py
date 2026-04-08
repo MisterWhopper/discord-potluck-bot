@@ -36,17 +36,13 @@ class CreatePotluckModal(discord.ui.Modal, title='Create Potluck'):
         label="Location",
         placeholder="ur mom's house"
     )
-    # request_participants_bring_food = discord.ui.Label(
-    #     text="Each participant should bring a food/drink",
-    #     component=discord.ui.Checkbox()
+    # items_to_bring = discord.ui.TextInput(
+    #     label='Additional items still needed',
+    #     style=discord.TextStyle.long,
+    #     placeholder='Format: <quantity>x <item> (one entry per line)',
+    #     required=False,
+    #     max_length=300,
     # )
-    items_to_bring = discord.ui.TextInput(
-        label='Additional items still needed',
-        style=discord.TextStyle.long,
-        placeholder='Format: <quantity>x <item> (one entry per line)',
-        required=False,
-        max_length=300,
-    )
 
     async def on_submit(self, interaction: discord.Interaction):
         await create_potluck_on_submit_impl(self, interaction)
@@ -130,8 +126,8 @@ async def create_potluck_on_submit_impl(modal: CreatePotluckModal, interaction: 
         # Just set the end time by default to the end of the suggested day
         to_eod = timedelta(hours=23-timestamp.hour, minutes=59-timestamp.minute, seconds=59-timestamp.minute)
         end_time = timestamp + to_eod
-        items = parse_items(modal.items_to_bring.value)
-        potluck = PotluckEvent(potluck_name, timestamp, location, items)
+        # items = parse_items(modal.items_to_bring.value)
+        potluck = PotluckEvent(potluck_name, timestamp, location, [])
         organizer.update(potluck)
         print(organizer.active_potlucks)
         # Create a scheduled event in Discord (hey the feature exists, may as well use it

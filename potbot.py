@@ -1,8 +1,25 @@
 import discord
 from discord import app_commands
+from datetime import datetime
+import dateutil.parser as DateParser
+from dateutil.parser._parser import ParserError
+from typing import Optional
+from pytz import timezone
 from ui import CreatePotluckModal, ClaimPotluckItemModal, organizer, PotluckEventView
 # from potluck import Item, parse_items, PotluckEvent, PotluckOrganizer
 
+CURRENT_TIMEZONE = timezone("US/Central")
+def try_parse_datetime(timestamp: str) -> Optional[datetime]:
+    try:
+        result = DateParser.parse(timestamp, fuzzy=True)
+        # The resulting datetime object must be timezone-aware for Discord to work
+        if result.tzinfo is None or result.tzinfo.utcoffset(result) is None:
+            # Assume it's the local timezone
+            # FIXME: Could there be a way to prompt the user for their timezone? 
+           result = CURRENT_TIMEZONE.localize(result) 
+        return result
+    except ParserError:
+        return None
 
 class PotluckBot(discord.Client):
     user: discord.ClientUser
