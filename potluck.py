@@ -6,6 +6,7 @@ from enum import IntEnum, auto
 from functools import partial
 from events import *
 
+
 class DietRestriction(IntEnum):
     VEGAN = auto()
     GLUTEN_FREE = auto()
@@ -17,7 +18,6 @@ class MessageType(IntEnum):
     USER_NOT_PERMITTED = auto()
     PL_EVENT_CREATED = auto()
     PL_EVENT_NOT_FOUND = auto()
-
 
 
 @dataclass
@@ -60,36 +60,45 @@ class AppSettings:
 
 class IMessage(Protocol):
     id: int
+
     async def resolve(self, data: dict[str, Any]) -> Any: ...
 
 
 class IMessageFactory(Protocol):
-    def build(self, message_type: MessageType, data: Optional[dict[str, Any]]=None): ...
+    def build(
+        self, message_type: MessageType, data: Optional[dict[str, Any]] = None
+    ): ...
 
 
 class INotifier(Protocol):
-    def forward_event_registration(self, event_type: EventType, callback: NotifierCallback) -> None: ...
+    def forward_event_registration(
+        self, event_type: EventType, callback: NotifierCallback
+    ) -> None: ...
     async def send_announcement(self, message: IMessage): ...
     async def send_message(self, message: IMessage, to_user: User): ...
     async def update_message(self, message_id: int, new_message: IMessage): ...
-    def run(): ...
+    def run(self): ...
 
 
 class IRepository(Protocol):
     def is_initialized(self) -> bool: ...
-    async def init(settings: Optional[AppSettings]) -> None: ...
+    def init(self, settings: Optional[AppSettings]) -> None: ...
     async def try_get_user_profile(self, user: User) -> Optional[PLProfile]: ...
     async def try_get_pl_event(self, pl_name: str) -> Optional[Potluck]: ...
-    async def save(data: Any): ...
-
+    async def save(self, data: Any): ...
 
 
 async def on_pl_event_create(event: PLEventCreateEvent, ctx: NotifierCallback):
     if not event.from_user.is_mod:
-        await ctx.notifier.send_message(ctx.message_factory.build(MessageType.USER_NOT_PERMITTED), event.from_user)
+        await ctx.notifier.send_message(
+            ctx.message_factory.build(MessageType.USER_NOT_PERMITTED), event.from_user
+        )
         return
-    await ctx.repository.save(event.potluck) 
-    await ctx.notifier.send_announcement(ctx.message_factory.build(MessageType.PL_EVENT_CREATED))
+    await ctx.repository.save(event.potluck)
+    await ctx.notifier.send_announcement(
+        ctx.message_factory.build(MessageType.PL_EVENT_CREATED)
+    )
+
 
 async def on_pl_event_edit(event: PLEventEditEvent, ctx: NotifierCallback):
     """
@@ -101,18 +110,25 @@ async def on_pl_event_edit(event: PLEventEditEvent, ctx: NotifierCallback):
     """
     potluck = await ctx.repository.try_get_pl_event(event.pl_name)
     if potluck is None:
-        await ctx.notifier.send_message(ctx.message_factory.build(MessageType.PL_EVENT_NOT_FOUND), event.from_user)
+        await ctx.notifier.send_message(
+            ctx.message_factory.build(MessageType.PL_EVENT_NOT_FOUND), event.from_user
+        )
     if not (event.from_user == potluck.organizer or event.from_user.is_mod):
-        await ctx.notifier.send_message(ctx.message_factory.build(MessageType.USER_NOT_PERMITTED), event.from_user)
+        await ctx.notifier.send_message(
+            ctx.message_factory.build(MessageType.USER_NOT_PERMITTED), event.from_user
+        )
     event.new_potluck.announcement_message.id = potluck.announcement_message.id
     await ctx.repository.remove(potluck)
     await ctx.repository.save(event.new_potluck)
-    await ctx.notifier.update_message(potluck.announcement_message.id, event.new_potluck)
+    await ctx.notifier.update_message(
+        potluck.announcement_message.id, event.new_potluck
+    )
+
 
 # NOTE: in discy just call this if either the proper scheduled event or the announcement message are deleted
 async def on_pl_event_delete(event: PLEventDeleteEvent, ctx: NotifierCallback):
-
     pass
+
 
 async def on_pl_event_accept_precheck(event: IEvent, ctx: NotifierCallback):
     """
@@ -122,8 +138,10 @@ async def on_pl_event_accept_precheck(event: IEvent, ctx: NotifierCallback):
     """
     pass
 
+
 async def on_pl_event_decline_precheck(event: IEvent, ctx: NotifierCallback):
     pass
+
 
 async def on_pl_event_accept_postcheck(event: IEvent, ctx: NotifierCallback):
     """
@@ -136,8 +154,10 @@ async def on_pl_event_accept_postcheck(event: IEvent, ctx: NotifierCallback):
     """
     pass
 
+
 async def on_pl_event_decline_postcheck(event: IEvent, ctx: NotifierCallback):
     pass
+
 
 async def on_pl_profile_edit(event: IEvent, ctx: NotifierCallback):
     """
@@ -146,7 +166,13 @@ async def on_pl_profile_edit(event: IEvent, ctx: NotifierCallback):
     """
     pass
 
-def start_pl_bot(notifier: INotifier, repository: IRepository, message_factory: IMessageFactory, settings: Optional[AppSettings] = None):
+
+def start_pl_bot(
+    notifier: INotifier,
+    repository: IRepository,
+    message_factory: IMessageFactory,
+    settings: Optional[AppSettings] = None,
+):
     """
     Operations as follows:
         1. Intitialize the repository if necessary
@@ -155,13 +181,39 @@ def start_pl_bot(notifier: INotifier, repository: IRepository, message_factory: 
     """
     if not repository.is_initialized():
         repository.init(settings)
-    callback_builder = partial(NotifierCallback, notifier=notifier,repository=repository, message_factory=message_factory, settings=settings)
-    notifier.forward_event_registration(EventType.PL_EVENT_CREATE, callback_builder(on_pl_event_create))
-    notifier.forward_event_registration(EventType.PL_EVENT_EDIT, callback_builder(on_pl_event_edit))
-    notifier.forward_event_registration(EventType.PL_EVENT_DELETE, callback_builder(on_pl_event_delete))
-    notifier.forward_event_registration(EventType.PL_EVENT_ACCEPT_PRECHECK, callback_builder(on_pl_event_accept_precheck))
-    notifier.forward_event_registration(EventType.PL_EVENT_DECLINE_PRECHECK, callback_builder(on_pl_event_decline_precheck))
-    notifier.forward_event_registration(EventType.PL_EVENT_ACCEPT_POSTCHECK, callback_builder(on_pl_event_accept_postcheck))
-    notifier.forward_event_registration(EventType.PL_EVENT_DECLINE_POSTCHECK, callback_builder(on_pl_event_decline_postcheck))
-    notifier.forward_event_registration(EventType.PL_PROFILE_EDIT, callback_builder(on_pl_profile_edit))
+    callback_builder = partial(
+        NotifierCallback,
+        notifier=notifier,
+        repository=repository,
+        message_factory=message_factory,
+        settings=settings,
+    )
+    notifier.forward_event_registration(
+        EventType.PL_EVENT_CREATE, callback_builder(on_pl_event_create)
+    )
+    notifier.forward_event_registration(
+        EventType.PL_EVENT_EDIT, callback_builder(on_pl_event_edit)
+    )
+    notifier.forward_event_registration(
+        EventType.PL_EVENT_DELETE, callback_builder(on_pl_event_delete)
+    )
+    notifier.forward_event_registration(
+        EventType.PL_EVENT_ACCEPT_PRECHECK,
+        callback_builder(on_pl_event_accept_precheck),
+    )
+    notifier.forward_event_registration(
+        EventType.PL_EVENT_DECLINE_PRECHECK,
+        callback_builder(on_pl_event_decline_precheck),
+    )
+    notifier.forward_event_registration(
+        EventType.PL_EVENT_ACCEPT_POSTCHECK,
+        callback_builder(on_pl_event_accept_postcheck),
+    )
+    notifier.forward_event_registration(
+        EventType.PL_EVENT_DECLINE_POSTCHECK,
+        callback_builder(on_pl_event_decline_postcheck),
+    )
+    notifier.forward_event_registration(
+        EventType.PL_PROFILE_EDIT, callback_builder(on_pl_profile_edit)
+    )
     notifier.run()

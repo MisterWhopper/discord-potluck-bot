@@ -21,6 +21,7 @@ def try_parse_datetime(timestamp: str) -> Optional[datetime]:
     except ParserError:
         return None
 
+
 class PotluckBot(discord.Client):
     user: discord.ClientUser
 
