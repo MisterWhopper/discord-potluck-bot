@@ -1,92 +1,30 @@
-from __future__ import annotations
-from dataclasses import dataclass, field
-from datetime import datetime
-from typing import Optional, Protocol, Any
-from enum import IntEnum, auto
-from functools import partial
-from events import *
+from potluck.models import *
+import math
 
+def calc_pl_item_requirements(pl: Potluck):
+    """
+    As more users accept the invitation to the potluck, more goods
+    will be required. Using perfectpotluck[.]com as a guide,
+    we can round up to the nearest multiple of 10.
 
-class DietRestriction(IntEnum):
-    VEGAN = auto()
-    GLUTEN_FREE = auto()
-    KOSHER = auto()
-    PESCATARIAN = auto()
-
-
-class MessageType(IntEnum):
-    USER_NOT_PERMITTED = auto()
-    PL_EVENT_CREATED = auto()
-    PL_EVENT_NOT_FOUND = auto()
-
-
-@dataclass
-class PLProfile:
-    diet_restrictions: DietRestriction
-    allergies: list[str]
-    strong_dislikes: list[str]
-
-
-@dataclass
-class User:
-    id: str
-    name: str
-    is_mod: bool
-    profile: Optional[PLProfile] = None
-
-
-@dataclass
-class Potluck:
-    name: str
-    event_time: datetime
-    location: str
-    participants: list[User] = field(default_factory=list)
-    announcement_message: Optional[IMessage] = None
-
-
-@dataclass
-class NotifierCallback:
-    callback: EventCallback
-    notifier: INotifier
-    repository: IRepository
-    message_factory: IMessageFactory
-    settings: Optional[AppSettings] = None
-
-
-@dataclass
-class AppSettings:
-    pass
-
-
-class IMessage(Protocol):
-    id: int
-
-    async def resolve(self, data: dict[str, Any]) -> Any: ...
-
-
-class IMessageFactory(Protocol):
-    def build(
-        self, message_type: MessageType, data: Optional[dict[str, Any]] = None
-    ): ...
-
-
-class INotifier(Protocol):
-    def forward_event_registration(
-        self, event_type: EventType, callback: NotifierCallback
-    ) -> None: ...
-    async def send_announcement(self, message: IMessage): ...
-    async def send_message(self, message: IMessage, to_user: User): ...
-    async def update_message(self, message_id: int, new_message: IMessage): ...
-    def run(self): ...
-
-
-class IRepository(Protocol):
-    def is_initialized(self) -> bool: ...
-    def init(self, settings: Optional[AppSettings]) -> None: ...
-    async def try_get_user_profile(self, user: User) -> Optional[PLProfile]: ...
-    async def try_get_pl_event(self, pl_name: str) -> Optional[Potluck]: ...
-    async def save(self, data: Any): ...
-
+    Additionally, if we know that some users have diet restrictions
+    we can adjust the counts (e.g. ensuring a vegan entree is required
+    if at least one user is a vegan)
+    """
+    # A guesstimate of how many people a single item of each type can feed
+    # TODO: Make this a configuration item?
+    per_person_mapping = {
+        ItemType.ENTREE: 10,
+        ItemType.SIDE: 5,
+        ItemType.BEVERAGE: 15,
+        ItemType.DESSERT: 10
+    }
+    min_item_counts = {k: math.ceil(len(pl.participants) / v) for k,v in per_person_mapping.items()}
+    for commitment in pl.item_commitments:
+        # TODO: Add diet/allergen checking here
+        min_item_counts[commitment.item_type] -= 1
+    current_item_counts = {k: v for k,v in min_item_counts.items() if v > 0}
+    return current_item_counts
 
 async def on_pl_event_create(event: PLEventCreateEvent, ctx: NotifierCallback):
     if not event.from_user.is_mod:

@@ -2,7 +2,7 @@ from potluck import NotifierCallback, User, Potluck
 from typing import Callable, Protocol
 from enum import IntEnum, auto
 from dataclasses import dataclass
-from functools import wraps
+from functools import wraps, dataclass_transform
 
 type EventCallback = Callable[[IEvent, NotifierCallback], None]
 
@@ -26,7 +26,7 @@ class EventListener:
     def __init__(self):
         self.callbacks: dict[EventType, EventCallback] = {}
 
-    def register(self, event_type: EventType, callback: NotifierCallback) -> None:
+    def register(self, event_type: EventType, callback: EventCallback) -> None:
         if event_type in self.callbacks.keys():
             # TODO: Throw error messages properly
             print(f"ERROR: Tried to register a callback for event '{event_type}' for '{type(self)}', but one already existed")
@@ -39,9 +39,10 @@ class EventListener:
             print(f"ERROR: No callback registered for event '{event.type}' via '{type(self)}'")
             return
         if (callback_ctx := self.callbacks.get(event.type)) is not None:
-            await callback_ctx.callback(event, callback_ctx)
+            await callback_ctx(event, callback_ctx)
 
 
+@dataclass_transform
 def event_of_type(event_type: EventType):
     """
     Helper decorator to ensure IEvent subclasses always have the correct event type associated.
@@ -57,18 +58,17 @@ def event_of_type(event_type: EventType):
                 setattr(inst, "type", event_type)
                 return inst
         event_cls.__new__ = inner
+        event_cls = dataclass(event_cls)
         return inner
     return decorator
 
 @event_of_type(EventType.PL_EVENT_CREATE)
-@dataclass
 class PLEventCreateEvent(IEvent):
     from_user: User
     potluck: Potluck
 
 
 @event_of_type(EventType.PL_EVENT_EDIT)
-@dataclass
 class PLEventEditEvent(IEvent):
     from_user: User
     potluck_name: str
@@ -76,7 +76,6 @@ class PLEventEditEvent(IEvent):
 
 
 @event_of_type(EventType.PL_EVENT_DELETE)
-@dataclass
 class PLEventDeleteEvent(IEvent):
     from_user: User
     potluck_name: str
